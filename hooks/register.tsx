@@ -18,7 +18,7 @@ import type { CacheView } from './cache-art'
 // cold starts open, and a choice holds until the cache flips. Zero token cost:
 // it reads the engine's own figures and draws.
 
-const CELLS = 10
+const CELLS = 5
 const LOW_AT = 15
 const TIGHT_CELLS = 6
 /** How often the band redraws, so the countdown and the warm-to-cold flip stay current. */
@@ -30,6 +30,7 @@ const fold = atom({ plugin: 'ribbon', key: 'fold' } as const, null as Fold | nul
 
 const NAMES: Record<string, string> = { seven_day: '7D', five_hour: '5H', spend_limit: 'SPEND' }
 const ORDER: Record<string, number> = { seven_day: 0, five_hour: 1 }
+const LOW = '#b53333'
 const COLORS: Record<string, string> = { seven_day: ORANGE, five_hour: YELLOW }
 
 const clean = (list: readonly Window[]): Window[] =>
@@ -39,7 +40,7 @@ const clean = (list: readonly Window[]): Window[] =>
 
 const dots = (left: number, cells: number): { on: string; off: string } => {
   const n = Math.max(0, Math.min(cells, Math.round((left / 100) * cells)))
-  return { on: '●'.repeat(n), off: '·'.repeat(cells - n) }
+  return { on: '━'.repeat(n), off: '╌'.repeat(cells - n) }
 }
 
 const fmtReset = (iso: string | undefined, now: number): string => {
@@ -160,179 +161,41 @@ export const register: Register = on => {
       )
     }
 
-    const columns = e.props.bodyColumns ?? e.viewport?.columns ?? 100
-    const kind = kindOf(columns)
-    const isWide = kind === 'wide'
-    const cells = kind === 'tight' ? TIGHT_CELLS : CELLS
-
-    const parts = (w: Window) => {
+    // One slim row, always: usage bars, then the cache state as plain text.
+    const bar = (w: Window, i: number) => {
       const left = Math.max(0, Math.round((100 - w.percentUsed) * 10) / 10)
-      return {
-        left,
-        col: COLORS[w.kind] ?? TEXT,
-        name: NAMES[w.kind] ?? w.kind.toUpperCase(),
-        d: dots(left, cells),
-        reset: fmtReset(w.resetsAt, now),
-      }
-    }
-
-    // Wide: every window on one row. Narrow: each window is a block of three
-    // lines (name and dots, percent left, reset time) so nothing wraps or clips.
-    const wide = (w: Window, i: number) => {
-      const p = parts(w)
+      const col = COLORS[w.kind] ?? TEXT
+      const d = dots(left, CELLS)
+      const reset = fmtReset(w.resetsAt, now)
       return (
-        <Box key={`w-${i}`} flexDirection="row" flexShrink={0} marginRight={3}>
-          <Text color={MUTED} bold>{p.name} </Text>
-          <Text color={p.col}>{p.d.on}</Text>
-          <Text color={EMPTY}>{p.d.off}</Text>
-          <Text color={p.col} bold> {p.left}% left</Text>
-          {p.left < LOW_AT ? <Text color={TEXT} bold> LOW</Text> : null}
-          {p.reset ? <Text color={MUTED}> · {p.reset}</Text> : null}
+        <Box key={`w-${i}`} flexShrink={0} marginRight={2}>
+          <Text color={MUTED}>{(NAMES[w.kind] ?? w.kind).toLowerCase()} </Text>
+          <Text color={col}>{d.on}</Text>
+          <Text color={EMPTY}>{d.off}</Text>
+          <Text color={left < LOW_AT ? LOW : col}> {left}%</Text>
+          {reset ? <Text color={MUTED}> ↻{reset.replace(' ', '')}</Text> : null}
         </Box>
       )
     }
 
-    const stacked = (w: Window, i: number) => {
-      const p = parts(w)
-      return (
-        <Box key={`w-${i}`} flexDirection="column" flexShrink={0} marginRight={3}>
-          <Box flexDirection="row">
-            <Text color={MUTED} bold>{p.name} </Text>
-            <Text color={p.col}>{p.d.on}</Text>
-            <Text color={EMPTY}>{p.d.off}</Text>
-          </Box>
-          <Box flexDirection="row">
-            <Text color={p.col} bold>{p.left}% left</Text>
-            {p.left < LOW_AT ? <Text color={TEXT} bold> LOW</Text> : null}
-          </Box>
-          {p.reset ? <Text color={MUTED}>resets {p.reset}</Text> : null}
-        </Box>
-      )
-    }
-
-    const label = (
-      <Box key="label" flexShrink={0} marginRight={isWide ? 2 : 3}>
-        <Text color={TEXT} bold>USAGE</Text>
-      </Box>
-    )
-    const usage = list.length > 0
-      ? list.map(isWide ? wide : stacked)
-      : [<Box key="wait" flexShrink={0} marginRight={3}><Text color={MUTED}>waiting for the first reply</Text></Box>]
-
-    // Before the first reply there is no cache to show: today's band, as it was.
-    if (!view) {
-      return (
-        <Box flexDirection="row" backgroundColor={BG} paddingX={1}>
-          {label}
-          {usage}
-        </Box>
-      )
-    }
-
-    const mode = view.mode
-    const cold = mode === 'cold'
-    const hue = HUE[mode]
-    const mine = mineModel(view)
-    const stored = await read($, fold)
-    // Folding needs the card, and the card is a drawing: the terminal stays folded.
-    const open = Svg !== null && (stored && stored.mode === mode ? stored.open : cold)
-    const toggle = () =>
-      update($, fold, f => ({ mode, open: !(f && f.mode === mode ? f.open : mode === 'cold') }))
-
-    const badge = Svg
-      ? [
-          <Svg key="robo" source={roboSvg(mode)} alt={cold ? 'Robo, frozen' : 'Robo, bobbing'} width={ROBO_SIZE} height={ROBO_SIZE} isInteractive />,
-          <Text key="gap"> </Text>,
-          (() => {
-            const c = chipSvg(mode)
-            return <Svg key="chip" source={c.source} alt={WORD[mode]} width={c.w} height={c.h} />
-          })(),
-        ]
-      : [<Text key="chip" backgroundColor={hue} color={INK} bold>{` ${WORD[mode]} `}</Text>]
-
-    const summary = cold
-      ? [
-          <Text key="idle" color={hue} bold>{` ${view.idle}`}</Text>,
-          mine ? <Text key="dot" color={MUTED}> · </Text> : null,
-          mine ? <Text key="cost" color={TEXT} bold>{usd(costOf(mine, mode, view.tokens))}</Text> : null,
-        ]
-      : [<Text key="left" color={hue} bold>{` ${Math.max(0, TTL_MIN - view.idleMin)}m left`}</Text>]
-
-    const button = Svg ? (
-      <Box key="fold" flexShrink={0} alignItems="flex-start">
-        <Button key="cache-fold" label={open ? 'Hide' : 'Show'} onPress={toggle} />
-      </Box>
-    ) : null
-    const grow = <Box key="grow" flexGrow={1} />
-
-    let rows
-    if (kind === 'wide') {
-      rows = (
-        <Box key="row" flexDirection="row" paddingX={1} alignItems="center">
-          {label}
-          {usage}
-          {open ? null : (
-            <Box key="inline" flexDirection="row" flexShrink={0} marginRight={2} alignItems="center">
-              {badge}
-              {summary}
-            </Box>
-          )}
-          {grow}
-          {button}
-        </Box>
-      )
-    } else if (kind === 'stacked') {
-      // The cache becomes a third stacked block, the same shape as 7D and 5H.
-      rows = (
-        <Box key="row" flexDirection="row" paddingX={1}>
-          {label}
-          {usage}
-          {open ? null : (
-            <Box key="block" flexDirection="column" flexShrink={0} marginRight={2}>
-              <Box flexDirection="row" alignItems="center">{badge}</Box>
-              <Text color={hue} bold>{cold ? `${view.idle} idle` : `${Math.max(0, TTL_MIN - view.idleMin)}m left`}</Text>
-              {mine ? (
-                <Box flexDirection="row">
-                  <Text color={TEXT} bold>{usd(costOf(mine, mode, view.tokens))}</Text>
-                  <Text color={MUTED}> next</Text>
-                </Box>
-              ) : null}
-            </Box>
-          )}
-          {grow}
-          {button}
-        </Box>
-      )
-    } else {
-      // Narrow: the cache gets its own row under the usage blocks.
-      rows = [
-        <Box key="row" flexDirection="row" paddingX={1}>
-          {label}
-          {usage}
-        </Box>,
-        <Box key="cache" flexDirection="row" paddingX={1} alignItems="center">
-          {badge}
-          {summary}
-          {grow}
-          {button}
-        </Box>,
-      ]
-    }
-
-    let card = null
-    if (open && Svg) {
-      const c = cardSvg(view, kind, bandPx(columns))
-      card = (
-        <Box key="card" flexDirection="row">
-          <Svg source={c.source} alt={c.alt} width={c.w} height={c.h} isInteractive={kind !== 'tight'} />
+    let cacheText = null
+    if (view) {
+      const cold = view.mode === 'cold'
+      const mine = mineModel(view)
+      const hue = HUE[view.mode]
+      cacheText = (
+        <Box key="cache" flexShrink={0}>
+          <Text color={hue}>{`● ${WORD[view.mode].toLowerCase()} `}</Text>
+          <Text color={MUTED}>{cold ? `${view.idle}${mine ? ` · ${usd(costOf(mine, view.mode, view.tokens))}` : ''}` : `${Math.max(0, TTL_MIN - view.idleMin)}m`}</Text>
         </Box>
       )
     }
 
     return (
-      <Box flexDirection="column" backgroundColor={BG}>
-        {rows}
-        {card}
+      <Box flexDirection="row" backgroundColor={BG} paddingX={1}>
+        <Box flexShrink={0} marginRight={2}><Text color={MUTED}>◆ ribbon</Text></Box>
+        {list.map(bar)}
+        {cacheText}
       </Box>
     )
   })

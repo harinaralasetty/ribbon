@@ -2,7 +2,9 @@
   <img src="assets/banner.png" alt="ribbon" width="100%">
 </p>
 
-# ribbon
+# ribbon (light, one-line fork)
+
+Fork of [robonuggets/ribbon](https://github.com/robonuggets/ribbon) by Jay E (MIT). Changes: a light palette that matches the Claude app, and a single slim row (no card, no robot): `◆ ribbon  7d ━━━━╌ 81% ↻3d9h  5h ━━━━━ 96% ↻4h  ● warm 53m`. The text below describes the original.
 
 A free mod for Claude Code. It adds a slim band above your prompt that shows:
 

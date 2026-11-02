@@ -7,19 +7,19 @@ export type Mode = 'warm' | 'cold'
 export type Kind = 'wide' | 'stacked' | 'tight'
 
 // The band's own colours, measured from the app.
-export const BG = '#24221c'
-export const TEXT = '#e8e2d2'
-export const MUTED = '#8d8775'
-export const EMPTY = '#4a463b'
-export const LINE = '#36332b'
-export const ORANGE = '#ff6b1a'
-export const YELLOW = '#f5a623'
+export const BG = '#faf9f5'
+export const TEXT = '#3d3929'
+export const MUTED = '#83827d'
+export const EMPTY = '#dedcd1'
+export const LINE = '#e8e6dc'
+export const ORANGE = '#c96442'
+export const YELLOW = '#6a9bcc'
 
 // The cache's two states in a muted shade: desaturated so they sit
 // beside the band's own orange and yellow.
-export const HUE: Record<Mode, string> = { warm: '#cc6363', cold: '#6aaabd' }
+export const HUE: Record<Mode, string> = { warm: '#788c5d', cold: '#8a7fb0' }
 /** Text on a filled chip. */
-export const INK = '#1c1a16'
+export const INK = '#faf9f5'
 export const WORD: Record<Mode, string> = { warm: 'WARM', cold: 'COLD' }
 
 /** The prompt cache lives an hour after the last request that read or wrote it. */
